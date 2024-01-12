@@ -252,7 +252,6 @@ class Ui_MainWindow(object):
             for word in unique_words_list:
                 file.write(word + '\n')
 
-                
     def read_queue(self):
         while self.run:
             try:

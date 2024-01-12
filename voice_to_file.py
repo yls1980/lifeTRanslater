@@ -73,7 +73,6 @@ class Listen:
         self.connection.commit()
         self.cursor.close()
 
-
     def write_to_file(self):
         total_time = 0
         self.cursor = self.connection.cursor()
