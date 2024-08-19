@@ -1,4 +1,4 @@
-from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
 import threading
 import time
 import soundcard as sc
@@ -22,8 +22,8 @@ class Listen:
     def __init__(self):
         self.load_settings()
         self.create_table()
-        self.executor = None
-        self.stop_event = threading.Event()
+        self.stop_event = multiprocessing.Event()
+        self.processes = []
 
     def create_table(self):
         #connection = sqlite3.connect("voise_data.db")
@@ -122,7 +122,7 @@ class Listen:
 
     def listen_mic_work(self, vRECORD_SECONDS, v_file_name):
         try:
-            SAMPLE_RATE = 48000
+            SAMPLE_RATE = 44100
             mic = sc.default_microphone()
             with mic.recorder(samplerate=SAMPLE_RATE) as recorder:
                 # record audio with loopback from default speaker.
@@ -196,25 +196,25 @@ class Listen:
         self.del_off()
         connection.close()
 
-    def start_threads(self):
-        #write_thread = threading.Thread(target=self.write_to_file, args=(self.listen_mic_work,'mc'))
-        #write_thread1 = threading.Thread(target=self.write_to_file, args=(self.listen_comp_work,'cp'))
-        logging.debug(f'Запускаю поток')
-        if self.executor is None or self.executor._shutdown:
+    def start_processes(self):
+        if not self.processes or all(not p.is_alive() for p in self.processes):
             self.stop_event.clear()
-            self.executor = ThreadPoolExecutor(max_workers=2)
-            self.executor.submit(self.write_to_file,self.stop_event,self.listen_mic_work, 'mc')
-            self.executor.submit(self.write_to_file,self.stop_event,self.listen_comp_work,'cp')
 
-    def stop_threads(self):
+            p1 = multiprocessing.Process(target=self.write_to_file, args=(self.stop_event, self.listen_mic_work, 'mc'))
+            p2 = multiprocessing.Process(target=self.write_to_file, args=(self.stop_event, self.listen_comp_work, 'cp'))
+
+            p1.start()
+            p2.start()
+
+            self.processes = [p1, p2]
+
+
+    def stop_processes(self):
         self.stop_event.set()
-        if self.executor:
-            self.executor.shutdown(wait=True)
+        for p in self.processes:
+            if p.is_alive():
+                p.join()
 
-    def closeEvent(self, event):
-        # Ensure threads are stopped when closing the window
-        self.stop_threads()
-        event.accept()
 
 
     # def run_tread(self):

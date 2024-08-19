@@ -1,4 +1,3 @@
-from concurrent.futures import ThreadPoolExecutor
 import threading
 import time
 import soundcard as sc
@@ -22,8 +21,8 @@ class Listen:
     def __init__(self):
         self.load_settings()
         self.create_table()
-        self.executor = None
         self.stop_event = threading.Event()
+        self.threads = []
 
     def create_table(self):
         #connection = sqlite3.connect("voise_data.db")
@@ -122,7 +121,7 @@ class Listen:
 
     def listen_mic_work(self, vRECORD_SECONDS, v_file_name):
         try:
-            SAMPLE_RATE = 48000
+            SAMPLE_RATE = 44100
             mic = sc.default_microphone()
             with mic.recorder(samplerate=SAMPLE_RATE) as recorder:
                 # record audio with loopback from default speaker.
@@ -197,24 +196,23 @@ class Listen:
         connection.close()
 
     def start_threads(self):
-        #write_thread = threading.Thread(target=self.write_to_file, args=(self.listen_mic_work,'mc'))
-        #write_thread1 = threading.Thread(target=self.write_to_file, args=(self.listen_comp_work,'cp'))
-        logging.debug(f'Запускаю поток')
-        if self.executor is None or self.executor._shutdown:
+        if not self.threads or all(not t.is_alive() for t in self.threads):
             self.stop_event.clear()
-            self.executor = ThreadPoolExecutor(max_workers=2)
-            self.executor.submit(self.write_to_file,self.stop_event,self.listen_mic_work, 'mc')
-            self.executor.submit(self.write_to_file,self.stop_event,self.listen_comp_work,'cp')
+
+            t1 = threading.Thread(target=self.write_to_file, args=(self.stop_event, self.listen_mic_work, 'mc'))
+            t2 = threading.Thread(target=self.write_to_file, args=(self.stop_event, self.listen_comp_work, 'cp'))
+
+            t1.start()
+            t2.start()
+
+            self.threads = [t1, t2]
 
     def stop_threads(self):
         self.stop_event.set()
-        if self.executor:
-            self.executor.shutdown(wait=True)
+        for t in self.threads:
+            if t.is_alive():
+                t.join()
 
-    def closeEvent(self, event):
-        # Ensure threads are stopped when closing the window
-        self.stop_threads()
-        event.accept()
 
 
     # def run_tread(self):
